@@ -4,6 +4,9 @@ Flexaro Build & Deploy Script for WordPress Websites
 
 """
 
+import subprocess
+import os
+
 themes_input = os.getenv("WP_THEMES", "")
 plugins_input = os.getenv("WP_PLUGINS", "")
 
@@ -12,8 +15,6 @@ plugins = [p.strip() for p in plugins_input.split(",") if p.strip()]
 
 
 
-import subprocess
-import os
 
 FTP_HOST = os.getenv("FTP_HOST")
 FTP_USER = os.getenv("FTP_USER")
