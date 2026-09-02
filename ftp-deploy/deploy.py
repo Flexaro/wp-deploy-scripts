@@ -6,6 +6,7 @@ Flexaro Build & Deploy Script for WordPress Websites
 
 import subprocess
 import os
+import time
 
 themes_input = os.getenv("WP_THEMES", "")
 plugins_input = os.getenv("WP_PLUGINS", "")
@@ -117,16 +118,17 @@ def create_subdirectories(ftp, remote_dir):
 
 
 def upload_dir_to_ftp(local_dir, remote_dir):
-
+    u_timestamp = time.time_ns()
+    backup_dir = f"{remote_dir}-bk-{u_timestamp}"
     try:
         with ftplib.FTP(FTP_HOST) as ftp:
             ftp.login(FTP_USER, FTP_PASS)
             print(f"Connected to FTP server: {FTP_HOST}")
 
+
             # Rename remote directory if it exists to -backup
             try:
                 ftp.cwd(remote_dir)
-                backup_dir = f"{remote_dir}-backup"
                 try:
                     ftp.rename(remote_dir, backup_dir)
                     print(f"Renamed existing remote directory to: {backup_dir}")
