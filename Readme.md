@@ -71,6 +71,7 @@ EXCLUDES=(
     "$BUILD_DIR"
     "$ZIP_NAME"
     "build.sh"
+    "build.ps1"
     "package.json"
     "package-lock.json"
     "README.md"
@@ -80,10 +81,15 @@ EXCLUDES=(
 # Argument Parsing
 # ==========================================
 INSTALL=false
+NO_DELETE_DIR=false
 for arg in "$@"; do
     case $arg in
         -i|--install)
             INSTALL=true
+            shift
+            ;;
+        --no-delete-dir)
+            NO_DELETE_DIR=true
             shift
             ;;
     esac
@@ -120,5 +126,58 @@ rsync "${RSYNC_ARGS[@]}"
 echo "Creating zip archive..."
 zip -r "$ZIP_NAME" "$BUILD_DIR"
 
+if [ "$NO_DELETE_DIR" = false ]; then
+    echo "Cleaning up build directory..."
+    rm -rf "$BUILD_DIR"
+fi
+
 echo "Build completed: $ZIP_NAME"
+```
+
+You can also create a `build.ps1` script for Windows users. The script should have the same functionality as the `build.sh` script but written in PowerShell. You will need to have 7zip installed on your system and update the `$sevenZipPath` variable in the script to point to the correct path of the 7zip executable. Some servers does not support zip files created by the built-in Windows zip utility, so using 7zip is recommended.
+
+
+```powershell
+# Set variables
+$buildDir = "my-plugin"
+$zipName = "my-plugin.zip"
+
+# 7zip path
+$sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+
+
+# Delete build directory "my-plugin" if exists
+if (Test-Path -Path "./$buildDir") {
+    Remove-Item -Recurse -Force "./$buildDir"
+}
+if (Test-Path -Path "./$zipName") {
+    Remove-Item -Force "./$zipName"
+}
+
+# Create build directory
+New-Item -ItemType Directory -Path "./$buildDir"
+
+# If parameter has -install flag, run npm install
+param([switch]$install)
+if ($install) {
+    Write-Host "Running npm install..."
+    npm install
+    npm run build
+}
+
+# Copy theme files to build directory excluding node_modules and .git
+Write-Host "Copying theme files to build directory..."
+robocopy .\ .\my-plugin /E /XD node_modules .git .vscode my-plugin /XF build.ps1 package.json package-lock.json README.md 
+
+# Create zip archive of the build directory
+Write-Host "Creating zip archive..."
+& $sevenZipPath a -tzip "./$zipName" ".\$buildDir"
+
+# --no-delete-dir flag to skip deleting the build directory
+param([switch]$noDeleteDir)
+if (-not $noDeleteDir) {
+    Remove-Item -Recurse -Force "./$buildDir"
+}
+
+Write-Host "Build completed: $zipName"
 ```

@@ -64,9 +64,9 @@ def build_themes_or_plugins(theme_name, type="theme"):
 
     if is_build_script_exists(path):
         if is_windows():
-            subprocess_cmds = ["powershell", "-ExecutionPolicy", "Bypass", "-File", f"build.ps1"]
+            subprocess_cmds = ["powershell", "-ExecutionPolicy", "Bypass", "-File", f"build.ps1", "--install", "--no-delete-dir"]
         else:
-            subprocess_cmds = ["bash", f"build.sh"]
+            subprocess_cmds = ["bash", f"build.sh", "--install", "--no-delete-dir"]
 
         try:
             result = subprocess.run(subprocess_cmds, 
