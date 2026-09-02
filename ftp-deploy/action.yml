@@ -1,0 +1,56 @@
+name: 'WordPress Build & Deploy'
+description: 'Builds WordPress themes/plugins and deploys them via FTP.'
+
+inputs:
+  ftp_host:
+    description: 'FTP Host server'
+    required: true
+
+  ftp_user:
+    description: 'FTP Username'
+    required: true
+
+  ftp_password:
+    description: 'FTP Password'
+    required: true
+
+  wp_themes:
+    description: 'Comma-separated list of WordPress themes to deploy'
+    required: false
+    default: ''
+
+  wp_plugins:
+    description: 'Comma-separated list of WordPress plugins to deploy'
+    required: false
+    default: ''
+
+  ftp_port:
+    description: 'FTP Port'
+    required: false
+    default: '21'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install ftplib
+
+    - name: Run deployment script
+      shell: bash
+      env:
+        FTP_HOST: ${{ inputs.ftp_host }}
+        FTP_USER: ${{ inputs.ftp_user }}
+        FTP_PASSWORD: ${{ inputs.ftp_password }}
+        FTP_PORT: ${{ inputs.ftp_port }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        WP_THEMES: ${{ inputs.wp_themes }}
+        WP_PLUGINS: ${{ inputs.wp_plugins }}
+      run: python ${{ github.action_path }}/deploy.py
