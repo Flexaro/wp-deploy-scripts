@@ -1,21 +1,19 @@
 """
 Flexaro Build & Deploy Script for WordPress Websites
-@version 1.0.0
-
+@version 1.0.5
 """
 
 import subprocess
 import os
 import time
+import ftplib
+from pathlib import Path
 
 themes_input = os.getenv("WP_THEMES", "")
 plugins_input = os.getenv("WP_PLUGINS", "")
 
 themes = [t.strip() for t in themes_input.split(",") if t.strip()]
 plugins = [p.strip() for p in plugins_input.split(",") if p.strip()]
-
-
-
 
 FTP_HOST = os.getenv("FTP_HOST")
 FTP_USER = os.getenv("FTP_USER")
@@ -44,10 +42,30 @@ def is_build_script_exists(path):
     else:
         return os.path.exists(f"{path}/build.sh")
     
-    
+def delete_remote_dir(ftp, path):
+    """Recursively delete a remote directory and its contents via FTP."""
+    try:
+        entries = ftp.nlst(path)
+        for entry in entries:
+            if entry in (".", "..") or entry.endswith("/.") or entry.endswith("/.."):
+                continue
+            full_path = f"{path}/{entry}" if not entry.startswith(path) else entry
+            try:
+                delete_remote_dir(ftp, full_path)
+            except ftplib.error_perm:
+                try:
+                    ftp.delete(full_path)
+                except ftplib.error_perm:
+                    pass
+        ftp.rmd(path)
+    except ftplib.error_perm:
+        try:
+            ftp.delete(path)
+        except ftplib.error_perm:
+            pass
     
 ##########################################################
-# Step 1: Build the themes
+# Step 1: Build the themes and plugins
 ##########################################################
 build_files = []
 
@@ -57,16 +75,15 @@ def build_themes_or_plugins(theme_name, type="theme"):
     path = f"{base_path}/wp-content/{'themes' if type == 'theme' else 'plugins'}/{theme_name}"
     path_remote = f"/wp-content/{'themes' if type == 'theme' else 'plugins'}/{theme_name}"
 
-    
     subprocess_cmds = []
     if is_windows():
         path = path.replace("/", "\\")
 
     if is_build_script_exists(path):
         if is_windows():
-            subprocess_cmds = ["powershell", "-ExecutionPolicy", "Bypass", "-File", f"build.ps1", "--install", "--no-delete-dir"]
+            subprocess_cmds = ["powershell", "-ExecutionPolicy", "Bypass", "-File", "build.ps1", "--install", "--no-delete-dir"]
         else:
-            subprocess_cmds = ["bash", f"build.sh", "--install", "--no-delete-dir"]
+            subprocess_cmds = ["bash", "build.sh", "--install", "--no-delete-dir"]
 
         try:
             result = subprocess.run(subprocess_cmds, 
@@ -91,22 +108,16 @@ def build_themes_or_plugins(theme_name, type="theme"):
         print(f"No build script found for {type}: {theme_name}. Skipping build.")
 
 
-
-
-
 ##########################################################
 # Step 2: Upload to Server via FTP
 ##########################################################
-import ftplib
-from pathlib import Path
-
 ftplib.FTP_PORT = FTP_PORT
 
 def create_subdirectories(ftp, remote_dir):
     dirs = remote_dir.split('/')
     current_path = ''
     for dir in dirs:
-        if dir:  # Skip empty strings
+        if dir:  
             current_path += f'/{dir}'
             try:
                 ftp.mkd(current_path)
@@ -124,7 +135,6 @@ def upload_dir_to_ftp(local_dir, remote_dir):
         with ftplib.FTP(FTP_HOST) as ftp:
             ftp.login(FTP_USER, FTP_PASS)
             print(f"Connected to FTP server: {FTP_HOST}")
-
 
             # Rename remote directory if it exists to -backup
             try:
@@ -155,10 +165,10 @@ def upload_dir_to_ftp(local_dir, remote_dir):
                 print(f"Error during FTP upload: {e}")
                 exit(1)
 
-            # Delete the backup directory after successful upload
+            # Delete the backup directory after successful upload using recursive cleanup
             try:
                 ftp.cwd('/')
-                ftp.rmd(backup_dir)
+                delete_remote_dir(ftp, backup_dir)
                 print(f"Deleted backup directory: {backup_dir}")
             except ftplib.error_perm as e:
                 print(f"Failed to delete backup directory: {e}")
@@ -169,17 +179,14 @@ def upload_dir_to_ftp(local_dir, remote_dir):
 
 
 if __name__ == "__main__":
-
     check_env_variables()
 
-    # Step 1: Build the themes and plugins    
     for theme in themes:
         build_themes_or_plugins(theme, type="theme")
 
     for plugin in plugins:
         build_themes_or_plugins(plugin, type="plugin")
 
-    # Step 2: Upload the built themes and plugins to the server
     for theme_name, local_path, output_dir, remote_path in build_files:
         print(f"Uploading {theme_name} from {output_dir} to {remote_path}")
         upload_dir_to_ftp(output_dir, remote_path)
