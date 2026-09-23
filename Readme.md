@@ -138,15 +138,21 @@ You can also create a `build.ps1` script for Windows users. The script should ha
 
 
 ```powershell
+param(
+    [switch]$install,
+    [switch]$noDeleteDir
+)
+
 # Set variables
-$buildDir = "my-plugin"
-$zipName = "my-plugin.zip"
+$pluginName = "my-plugin"
+$buildDir = "$pluginName"
+$zipName = "$pluginName.zip"
 
 # 7zip path
 $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
 
 
-# Delete build directory "my-plugin" if exists
+# Delete build directory "<Plugin name dir>" if exists
 if (Test-Path -Path "./$buildDir") {
     Remove-Item -Recurse -Force "./$buildDir"
 }
@@ -158,26 +164,73 @@ if (Test-Path -Path "./$zipName") {
 New-Item -ItemType Directory -Path "./$buildDir"
 
 # If parameter has -install flag, run npm install
-param([switch]$install)
+
 if ($install) {
+    # if vendor directory exists, rename it to vendor_old
+    if (Test-Path -Path "./vendor") {
+        Rename-Item -Path "./vendor" -NewName "vendor_old"
+    }
+
+    Write-Host "Running composer install no-dev..."
+    composer install --no-dev --optimize-autoloader --no-interaction
+    
     Write-Host "Running npm install..."
     npm install
     npm run build
 }
 
+
 # Copy theme files to build directory excluding node_modules and .git
 Write-Host "Copying theme files to build directory..."
-robocopy .\ .\my-plugin /E /XD node_modules .git .vscode my-plugin /XF build.ps1 package.json package-lock.json README.md 
+# Define your exclusions here
+$excludeDirs = @(
+    "node_modules", 
+    ".git", 
+    ".vscode", 
+    "$PSScriptRoot\$buildDir", 
+    "$PSScriptRoot\vendor_old", 
+    "$PSScriptRoot\src", 
+    "$PSScriptRoot\stubs", 
+    "$PSScriptRoot\bin", 
+    "$PSScriptRoot\.circleci", 
+    "$PSScriptRoot\tests"
+)
+
+$excludeFiles = @(
+    "build.ps1", 
+    "package.json", 
+    "package-lock.json", 
+    "README.md",
+    "vite.config.ts",
+    "tsconfig.json",
+    "readme.txt",
+    "phpunit.xml",
+    "phpunit.xml.dist",
+    ".distignore",
+    ".gitignore",
+    ".gitattributes",
+    "composer.json"
+)
+
+# Execute robocopy with the arrays
+robocopy .\ .\$buildDir /E /XD $excludeDirs /XF $excludeFiles
+
 
 # Create zip archive of the build directory
 Write-Host "Creating zip archive..."
 & $sevenZipPath a -tzip "./$zipName" ".\$buildDir"
 
 # --no-delete-dir flag to skip deleting the build directory
-param([switch]$noDeleteDir)
 if (-not $noDeleteDir) {
     Remove-Item -Recurse -Force "./$buildDir"
 }
 
+
+if (Test-Path -Path "./vendor_old") {
+    if (Test-Path -Path "./vendor") {
+        Remove-Item -Recurse -Force "./vendor"
+    }
+    Rename-Item -Path "./vendor_old" -NewName "vendor"
+}
 Write-Host "Build completed: $zipName"
 ```
